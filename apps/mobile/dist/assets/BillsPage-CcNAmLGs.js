@@ -1,0 +1,1 @@
+import{a as e,r as t,s as n,t as r}from"./index-CcMYQ_s3.js";var i={};function a(r,i){return n(),e(`main`,null,[...i[0]||=[t(`h1`,null,`账单`,-1),t(`input`,{"aria-label":`搜索账单`,placeholder:`搜索分类、备注`},null,-1),t(`section`,null,[t(`p`,null,`暂无账单，点击“记一笔”开始。`)],-1)]])}var o=r(i,[[`render`,a]]);export{o as default};

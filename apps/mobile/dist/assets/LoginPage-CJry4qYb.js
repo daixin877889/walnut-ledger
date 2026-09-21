@@ -1,0 +1,1 @@
+import{a as e,r as t,s as n,t as r}from"./index-CcMYQ_s3.js";var i={};function a(r,i){return n(),e(`main`,null,[...i[0]||=[t(`h1`,null,`登录核桃记账`,-1),t(`input`,{"aria-label":`用户名`},null,-1),t(`input`,{"aria-label":`密码`,type:`password`},null,-1),t(`button`,null,`登录`,-1)]])}var o=r(i,[[`render`,a]]);export{o as default};

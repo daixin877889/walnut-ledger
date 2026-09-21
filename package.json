@@ -1,0 +1,15 @@
+{
+  "name": "walnut-ledger",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm --filter @walnut/mobile build",
+    "lint": "pnpm typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

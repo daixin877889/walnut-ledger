@@ -1,0 +1,1 @@
+export async function saveExportFile(blob:Blob,name:string,platform:{save?: (b:Blob,n:string)=>Promise<void>;download:(b:Blob,n:string)=>void}){if(platform.save)await platform.save(blob,name);else platform.download(blob,name)}

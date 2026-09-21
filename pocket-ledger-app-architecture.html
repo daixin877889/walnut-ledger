@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>个人记账 App｜产品与系统架构</title>
+  <style>
+    :root{--bg:#f4f7f5;--card:#fff;--text:#17211d;--muted:#68756f;--line:#dfe8e3;--green:#25a56f;--deep:#10704a;--soft:#eaf8f1;--blue:#3988db;--orange:#ed8a3b;--shadow:0 12px 36px rgba(18,58,42,.08)}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#f2faf6,#f7f8fb 46%,#f3f6f4);color:var(--text);font:15px/1.65 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+    .page{max-width:1180px;margin:auto;padding:44px 24px 72px}.hero{padding:38px;border-radius:28px;background:linear-gradient(135deg,#123d2c,#176b4b 60%,#23a46f);color:#fff;box-shadow:var(--shadow);position:relative;overflow:hidden}.hero:after{content:"";position:absolute;width:300px;height:300px;border-radius:50%;right:-90px;top:-150px;background:rgba(255,255,255,.09)}
+    .eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.75}.hero h1{font-size:clamp(28px,5vw,52px);line-height:1.12;margin:12px 0}.hero p{max-width:720px;font-size:17px;opacity:.88;margin:0}.chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:22px}.chip{padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18)}
+    section{margin-top:42px}.section-head{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:18px}.section-head h2{font-size:26px;margin:0}.section-head p{color:var(--muted);margin:0}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:21px;box-shadow:var(--shadow)}.num{font-size:12px;font-weight:750;color:var(--green);letter-spacing:.12em}.card h3{margin:6px 0 12px;font-size:21px}.card ul{margin:0;padding-left:19px;color:var(--muted)}
+    .quick{max-width:650px;margin:20px auto 0;padding:15px 18px;text-align:center;border:2px solid #9dd9bd;background:var(--soft);border-radius:999px;font-weight:750;color:var(--deep)}
+    .flow{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.flow-card{padding:22px;border-radius:18px;background:#fff;border:1px solid var(--line)}.flow-card strong{font-size:17px}.steps{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;color:var(--muted)}.step{padding:6px 10px;border-radius:8px;background:#f0f4f2}.arrow{color:var(--green);font-weight:900}
+    .arch{display:grid;grid-template-columns:1fr 80px 1fr 80px 1fr;align-items:stretch;gap:8px}.layer{border-radius:20px;padding:22px;background:#fff;border:1px solid var(--line)}.layer.app{border-top:5px solid var(--green)}.layer.api{border-top:5px solid var(--blue)}.layer.data{border-top:5px solid var(--orange)}.layer h3{margin:0 0 10px}.layer p{color:var(--muted);margin:5px 0}.connector{display:flex;align-items:center;justify-content:center;color:#91a49b;font-size:28px}
+    .sync{display:grid;grid-template-columns:1fr 1fr;gap:16px}.sync .card{box-shadow:none}.ok{color:var(--deep);font-weight:700}.table-wrap{overflow:auto;border-radius:18px;border:1px solid var(--line);background:#fff}table{width:100%;border-collapse:collapse;min-width:700px}th,td{text-align:left;padding:14px 17px;border-bottom:1px solid var(--line)}th{background:#f3f7f5;font-size:13px}td{color:var(--muted)}tr:last-child td{border-bottom:0}.tag{display:inline-block;padding:3px 8px;border-radius:6px;background:var(--soft);color:var(--deep);font-size:12px;font-weight:700}
+    .phase{display:grid;grid-template-columns:42px 1fr;gap:14px;position:relative}.phase+.phase{margin-top:12px}.dot{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;background:var(--green);color:#fff;font-weight:800}.phase-body{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px}.phase-body h3{margin:0 0 5px}.phase-body p{margin:0;color:var(--muted)}footer{text-align:center;color:var(--muted);margin-top:48px;font-size:13px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr 1fr}.flow{grid-template-columns:1fr}.arch{grid-template-columns:1fr}.connector{transform:rotate(90deg);height:36px}.sync{grid-template-columns:1fr}.section-head{display:block}.section-head p{margin-top:6px}}
+    @media(max-width:560px){.page{padding:18px 14px 45px}.hero{padding:26px 22px;border-radius:22px}.grid{grid-template-columns:1fr}.card{padding:18px}.quick{border-radius:16px}.hero p{font-size:15px}}
+  </style>
+</head>
+<body>
+<main class="page">
+  <header class="hero">
+    <div class="eyebrow">Product Blueprint · V1.0</div>
+    <h1>个人记账 App<br>产品与系统架构</h1>
+    <p>参考“口袋记账”的核心体验，采用原创品牌与界面。面向个人自用，Android 与 iPhone 双端运行，所有数据通过独立后端安全同步。</p>
+    <div class="chips"><span class="chip">Flutter</span><span class="chip">Go + Gin</span><span class="chip">PostgreSQL</span><span class="chip">本地优先</span><span class="chip">跨设备同步</span></div>
+  </header>
+
+  <section>
+    <div class="section-head"><div><div class="num">01 · INFORMATION ARCHITECTURE</div><h2>App 信息架构</h2></div><p>四个主导航，中间按钮快速记账</p></div>
+    <div class="grid">
+      <article class="card"><div class="num">01</div><h3>账单</h3><ul><li>本月收入、支出和结余</li><li>预算使用进度</li><li>按日期分组的账单流水</li><li>搜索、筛选与账单详情</li></ul></article>
+      <article class="card"><div class="num">02</div><h3>统计</h3><ul><li>日、月、年度收支趋势</li><li>收入与支出分类占比</li><li>同比、环比及平均消费</li><li>图表下钻到账单明细</li></ul></article>
+      <article class="card"><div class="num">03</div><h3>账户</h3><ul><li>资产、负债与净资产</li><li>现金、银行卡和信用卡</li><li>账户转账与余额调整</li><li>借入、借出与还款记录</li></ul></article>
+      <article class="card"><div class="num">04</div><h3>我的</h3><ul><li>账本、分类和标签管理</li><li>预算与周期账单</li><li>数据导入、导出及备份</li><li>安全、提醒和同步设置</li></ul></article>
+    </div>
+    <div class="quick">＋ 快速记一笔：支出　/　收入　/　转账</div>
+  </section>
+
+  <section>
+    <div class="section-head"><div><div class="num">02 · CORE FLOWS</div><h2>核心操作流程</h2></div><p>减少层级，让高频操作三步内完成</p></div>
+    <div class="flow">
+      <div class="flow-card"><strong>日常记账</strong><div class="steps"><span class="step">首页＋</span><span class="arrow">›</span><span class="step">金额与分类</span><span class="arrow">›</span><span class="step">账户</span><span class="arrow">›</span><span class="step">保存</span></div></div>
+      <div class="flow-card"><strong>查看分析</strong><div class="steps"><span class="step">统计</span><span class="arrow">›</span><span class="step">时间范围</span><span class="arrow">›</span><span class="step">图表</span><span class="arrow">›</span><span class="step">明细</span></div></div>
+      <div class="flow-card"><strong>管理资产</strong><div class="steps"><span class="step">账户</span><span class="arrow">›</span><span class="step">账户详情</span><span class="arrow">›</span><span class="step">流水/转账</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div><div class="num">03 · SYSTEM ARCHITECTURE</div><h2>系统架构</h2></div><p>客户端本地可用，网络恢复后自动同步</p></div>
+    <div class="arch">
+      <div class="layer app"><h3>Flutter App</h3><p>Android / iOS</p><p>SQLite / Drift 本地数据库</p><p>状态管理、图表、导入导出</p><p>安全存储登录凭证</p></div>
+      <div class="connector">⇄</div>
+      <div class="layer api"><h3>Go API</h3><p>Gin + JWT 身份认证</p><p>账本、账单、资产和预算服务</p><p>增量同步与冲突处理</p><p>导出任务及附件签名</p></div>
+      <div class="connector">⇄</div>
+      <div class="layer data"><h3>数据层</h3><p>PostgreSQL 业务数据</p><p>MinIO / OSS 图片凭证</p><p>Redis 可选缓存与限流</p><p>定时备份与恢复</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div><div class="num">04 · DATA SYNC</div><h2>离线与同步策略</h2></div><p>优先保证记账可靠性和响应速度</p></div>
+    <div class="sync">
+      <div class="card"><h3>本地优先</h3><p>每次记账先写入手机数据库，页面立即反馈；即使断网也能查询、修改和继续记账。</p><p class="ok">✓ 不因网络状态丢失操作</p></div>
+      <div class="card"><h3>增量同步</h3><p>每条数据带全局 ID、版本号和更新时间。网络恢复后仅上传和拉取变化的数据。</p><p class="ok">✓ 支持多设备与失败重试</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><div><div class="num">05 · DATA MODEL</div><h2>核心数据模型</h2></div><p>金额统一使用整数“分”存储</p></div>
+    <div class="table-wrap"><table><thead><tr><th>模块</th><th>核心数据表</th><th>用途</th></tr></thead><tbody>
+      <tr><td><span class="tag">用户</span></td><td>users, devices, refresh_tokens</td><td>身份认证、设备与登录状态</td></tr>
+      <tr><td><span class="tag">账本</span></td><td>ledgers, categories, tags</td><td>账本、收支分类和自定义标签</td></tr>
+      <tr><td><span class="tag">账单</span></td><td>transactions, transaction_tags, attachments</td><td>收入、支出、转账及图片凭证</td></tr>
+      <tr><td><span class="tag">资产</span></td><td>accounts, balance_adjustments</td><td>账户余额、信用卡和余额校准</td></tr>
+      <tr><td><span class="tag">计划</span></td><td>budgets, recurring_transactions</td><td>预算与周期账单</td></tr>
+      <tr><td><span class="tag">借贷</span></td><td>loans, loan_repayments</td><td>借入、借出和分次还款</td></tr>
+      <tr><td><span class="tag">同步</span></td><td>sync_changes, operation_logs</td><td>增量同步、删除标记及操作审计</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section>
+    <div class="section-head"><div><div class="num">06 · DELIVERY ROADMAP</div><h2>实施阶段</h2></div><p>先完成闭环，再增加增强功能</p></div>
+    <div class="phase"><div class="dot">1</div><div class="phase-body"><h3>基础闭环</h3><p>登录、账本、分类、账户、收入、支出、转账、账单首页。</p></div></div>
+    <div class="phase"><div class="dot">2</div><div class="phase-body"><h3>数据能力</h3><p>离线数据库、云同步、搜索筛选、预算、统计报表和数据导出。</p></div></div>
+    <div class="phase"><div class="dot">3</div><div class="phase-body"><h3>增强功能</h3><p>多账本、图片凭证、借入借出、周期账单、微信及支付宝账单导入。</p></div></div>
+    <div class="phase"><div class="dot">4</div><div class="phase-body"><h3>验证交付</h3><p>自动化测试、Android/iOS 真机测试、部署、备份演练和安装包交付。</p></div></div>
+  </section>
+
+  <footer>个人记账 App · 产品与系统架构草案 · 2026</footer>
+</main>
+</body>
+</html>

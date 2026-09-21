@@ -1,0 +1,19 @@
+name = "walnut-ledger-api"
+main = "src/app.ts"
+compatibility_date = "2026-09-21"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "walnut-ledger"
+database_id = "replace-after-wrangler-d1-create"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "walnut-ledger-files"
+
+[vars]
+PASSWORD_ITERATIONS = "210000"
+
+[triggers]
+crons = ["17 3 * * *"]

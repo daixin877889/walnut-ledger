@@ -1,0 +1,1 @@
+import{describe,expect,it,vi}from'vitest';import{saveExportFile}from'./files';describe('platform',()=>{it('uses web download when native filesystem is unavailable',async()=>{const download=vi.fn();const blob=new Blob(['x']);await saveExportFile(blob,'核桃记账.csv',{download});expect(download).toHaveBeenCalledWith(blob,'核桃记账.csv')})})

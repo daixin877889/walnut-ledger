@@ -1,0 +1,1 @@
+import{a as e,r as t,s as n,t as r}from"./index-CcMYQ_s3.js";var i={};function a(r,i){return n(),e(`main`,null,[...i[0]||=[t(`h1`,null,`统计`,-1),t(`section`,null,[t(`h2`,null,`本月结余`),t(`strong`,null,`¥0.00`)],-1),t(`section`,null,[t(`h2`,null,`分类占比`),t(`p`,null,`记账后显示`)],-1)]])}var o=r(i,[[`render`,a]]);export{o as default};

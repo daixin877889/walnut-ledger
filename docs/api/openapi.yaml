@@ -1,0 +1,16 @@
+openapi: 3.1.0
+info: { title: 核桃记账 API, version: 1.0.0 }
+servers: [{ url: https://YOUR_WORKER.workers.dev/api/v1 }]
+components:
+  securitySchemes: { bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT } }
+  schemas:
+    Envelope: { type: object, required: [code, message, data, request_id], properties: { code: { type: string }, message: { type: string }, data: {}, request_id: { type: string } } }
+security: [{ bearerAuth: [] }]
+paths:
+  /auth/register: { post: { security: [], summary: 邀请码注册, responses: { '201': { description: 已创建 }, '422': { description: 邀请码或输入无效 } } } }
+  /auth/login: { post: { security: [], summary: 登录, responses: { '200': { description: 会话 }, '401': { description: 凭据错误 } } } }
+  /ledgers: { get: { summary: 账本列表, responses: { '200': { description: 成功 } } }, post: { summary: 创建账本, responses: { '201': { description: 已创建 } } } }
+  /transactions: { post: { summary: 新增支出, responses: { '201': { description: 已创建 }, '422': { description: 输入无效 } } } }
+  /transfers: { post: { summary: 原子转账, responses: { '201': { description: 已创建 } } } }
+  /sync/push: { post: { summary: 推送离线变更, responses: { '200': { description: 接受项与冲突 } } } }
+  /sync/pull: { get: { summary: 拉取增量变更, parameters: [{ name: ledger_id, in: query, required: true, schema: { type: string } }, { name: after, in: query, schema: { type: integer } }], responses: { '200': { description: 增量页 } } } }
