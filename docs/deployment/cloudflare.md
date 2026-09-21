@@ -13,6 +13,8 @@ pnpm --filter @walnut/api exec wrangler r2 bucket create walnut-ledger-files
 
 把 D1 返回的 `database_id` 写入 `apps/api/wrangler.toml`，然后设置密钥并迁移：
 
+R2 需要先在 Cloudflare Dashboard 中启用；未启用时可以省略 `[[r2_buckets]]`，账本、同步和报表仍可使用，只有文件导出与逻辑备份不可用。
+
 ```bash
 pnpm --filter @walnut/api exec wrangler secret put ACCESS_TOKEN_SECRET
 pnpm --filter @walnut/api exec wrangler d1 migrations apply walnut-ledger --remote
