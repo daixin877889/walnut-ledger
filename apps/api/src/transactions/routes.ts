@@ -1,5 +1,6 @@
-import { createAccountSchema, createCategorySchema, createExpenseSchema, createTagSchema, createTransferSchema, updateTransactionSchema } from '@walnut/contracts'
+import { createAccountSchema, createCategorySchema, createExpenseSchema, createTagSchema, createTransferSchema, updateTransactionSchema, updateCategorySchema } from '@walnut/contracts'
 import { Hono } from 'hono'
+import { monthSchema, monthlyBudgetSchema } from '@walnut/contracts'
 import { authenticate, type AuthEnv } from '../auth/middleware'
 import { TransactionService } from './service'
 import { TransactionError } from './validation'
@@ -12,6 +13,16 @@ function fail(context: Parameters<Parameters<Hono<AuthEnv>['onError']>[0]>[1], e
 export function createTransactionRoutes() {
   const routes = new Hono<AuthEnv>()
   routes.use('*', authenticate)
+  routes.get('/ledgers/:ledgerId/budget', async context => {
+    const parsed=monthSchema.safeParse(context.req.query('month'))
+    if(!parsed.success)return context.json({code:'VALIDATION_ERROR',message:'invalid month',data:null,request_id:context.get('requestId')},422)
+    try{return context.json({code:'OK',message:'ok',data:await new TransactionService(context.env.DB).getBudget(context.get('userId'),context.req.param('ledgerId'),parsed.data),request_id:context.get('requestId')})}catch(error){return fail(context,error)}
+  })
+  routes.put('/ledgers/:ledgerId/budget', async context => {
+    const parsed=monthlyBudgetSchema.safeParse(await context.req.json().catch(()=>null))
+    if(!parsed.success)return context.json({code:'VALIDATION_ERROR',message:'invalid budget',data:null,request_id:context.get('requestId')},422)
+    try{return context.json({code:'OK',message:'ok',data:await new TransactionService(context.env.DB).setBudget(context.get('userId'),context.req.param('ledgerId'),parsed.data),request_id:context.get('requestId')})}catch(error){return fail(context,error)}
+  })
   routes.post('/transactions', async (context) => {
     const parsed = createExpenseSchema.safeParse(await context.req.json().catch(() => null))
     if (!parsed.success) return context.json({ code: 'VALIDATION_ERROR', message: 'invalid request', data: null, request_id: context.get('requestId') }, 422)
@@ -29,6 +40,20 @@ export function createTransactionRoutes() {
     } catch (error) { return fail(context, error) }
   })
   const resourceSchemas = { accounts: createAccountSchema, categories: createCategorySchema, tags: createTagSchema } as const
+  routes.post('/ledgers/:ledgerId/categories/batch', async context => {
+    const parsed = createCategorySchema.array().min(1).max(50).safeParse(await context.req.json().catch(() => null))
+    if (!parsed.success) return context.json({ code: 'VALIDATION_ERROR', message: 'invalid request', data: null, request_id: context.get('requestId') }, 422)
+    try { return context.json({ code: 'OK', message: 'ok', data: await new TransactionService(context.env.DB).createCategories(context.get('userId'), context.req.param('ledgerId'), parsed.data), request_id: context.get('requestId') }, 201) }
+    catch (error) { return fail(context, error) }
+  })
+  routes.patch('/ledgers/:ledgerId/categories/:id', async context => {
+    const parsed = updateCategorySchema.safeParse(await context.req.json().catch(() => null))
+    if (!parsed.success) return context.json({ code: 'VALIDATION_ERROR', message: 'invalid request', data: null, request_id: context.get('requestId') }, 422)
+    try {
+      const data = await new TransactionService(context.env.DB).updateCategory(context.get('userId'), context.req.param('ledgerId'), context.req.param('id'), parsed.data)
+      return context.json({ code: 'OK', message: 'ok', data, request_id: context.get('requestId') })
+    } catch (error) { return fail(context, error) }
+  })
   for (const resource of ['accounts', 'categories', 'tags'] as const) {
     routes.post(`/ledgers/:ledgerId/${resource}`, async (context) => {
       const parsed = resourceSchemas[resource].safeParse(await context.req.json().catch(() => null))

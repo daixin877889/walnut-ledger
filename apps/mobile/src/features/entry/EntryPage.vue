@@ -1,70 +1,110 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import AppIcon from '../../ui/AppIcon.vue'
-import { createIndexedDbDatabase } from '../../core/database/indexed-db'
-import { amountCents, initialAmountState, reduceAmount } from './amount-machine'
-import { expenseCategories, incomeCategories } from './categories'
+import { amountCents, initialAmountState, reduceAmount, MAX_AMOUNT_CENTS } from './amount-machine'
+import { api, useLedger, type Category, type Account } from '../../core/api/ledger-context'
+import { ApiError } from '../../core/api/client'
 
 const type = ref<'支出'|'收入'|'转账'>('支出')
-const selected = ref('餐饮')
+const router = useRouter(), route = useRoute()
+const { ledger, error, loading, canWrite, load, run } = useLedger()
+const selected = ref('')
+const allCategories = ref<Category[]>([]), accounts = ref<Account[]>([])
+const accountId = ref(''), toAccountId = ref(''), note = ref('')
+const editor = ref('')
+const dateValue = ref(localDateTime(new Date()))
+const operationKey = ref(crypto.randomUUID())
+const pendingRequest = ref<{ path:string; body:string }|null>(null)
+const locked = computed(() => loading.value || !!pendingRequest.value)
+function localDateTime(date: Date) { return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) }
 const state = ref(initialAmountState())
 const saved = ref(false)
-const categories = computed(() => type.value === '收入' ? incomeCategories : expenseCategories)
-const selectedCategory = computed(() => categories.value.find(item => item.name === selected.value) ?? categories.value[0]!)
-const today = new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(new Date()).replace('/', '月') + '日'
+const categories = computed(() => allCategories.value.filter(item => item.kind === (type.value === '收入' ? 'income' : 'expense')))
+const selectedCategory = computed(() => categories.value.find(item => item.id === selected.value) ?? { name: '选择分类', icon: '＋', color: '#eaf8f1' })
+const accountName = computed(() => accounts.value.find(item => item.id === accountId.value)?.name ?? '选择账户')
+onMounted(() => run(async () => {
+  const current = await load()
+  ;[allCategories.value, accounts.value] = await Promise.all([api.get<Category[]>(`/ledgers/${current.id}/categories`), api.get<Account[]>(`/ledgers/${current.id}/accounts`)])
+  if (route?.query.type === 'transfer') type.value = '转账'
+  selected.value = categories.value[0]?.id ?? ''; accountId.value = accounts.value[0]?.id ?? ''
+}))
 
 function changeType(next: '支出'|'收入'|'转账') {
+  if(locked.value)return
   type.value = next
-  selected.value = next === '收入' ? '工资' : '餐饮'
+  selected.value = categories.value[0]?.id ?? ''
+  operationKey.value = crypto.randomUUID(); saved.value = false
 }
 
 async function save(again = false) {
-  const cents = amountCents(state.value)
-  if (cents <= 0) return
-  const id = crypto.randomUUID()
-  const ledgerId = localStorage.getItem('ledger_id') ?? 'local'
-  const transaction = { id, ledger_id: ledgerId, amount_cents: cents, occurred_at: new Date().toISOString(), version: 1, kind: type.value === '收入' ? 'income' : type.value === '转账' ? 'transfer' : 'expense', category_name: selected.value, account_name: '现金账户', member_name: '自己', note: '' }
-  const db = await createIndexedDbDatabase()
-  await db.saveWithOutbox(transaction, { operation_id: crypto.randomUUID(), ledger_id: ledgerId, entity_type: 'transaction', entity_id: id, operation: 'upsert', base_version: 0, payload: transaction })
-  saved.value = true
-  if (again) state.value = initialAmountState()
-  else window.location.assign('/bills')
+  await run(async () => {
+    if(!pendingRequest.value) {
+    const cents = amountCents(state.value)
+    if (!Number.isSafeInteger(cents) || cents <= 0 || cents > MAX_AMOUNT_CENTS) throw new Error('请输入有效的正数金额，最大 999,999,999.99 元')
+    if (!ledger.value || !canWrite.value) throw new Error('当前账本没有记账权限')
+    if (!accountId.value) throw new Error('请先创建并选择账户')
+    if (type.value === '转账' ? !toAccountId.value || toAccountId.value === accountId.value : !selected.value) throw new Error(type.value === '转账' ? '请选择不同的转入、转出账户' : '请先创建并选择分类')
+    const date = new Date(dateValue.value)
+    if (!Number.isFinite(date.getTime())) throw new Error('请选择有效日期')
+    const common = { ledger_id: ledger.value.id, idempotency_key: operationKey.value, amount_cents: cents, occurred_at: date.toISOString() }
+    const body = type.value === '转账' ? { ...common, from_account_id: accountId.value, to_account_id: toAccountId.value } : { ...common, kind: type.value === '收入' ? 'income' : 'expense', account_id: accountId.value, category_id: selected.value, note: note.value }
+    pendingRequest.value ??= { path:type.value === '转账' ? '/transfers' : '/transactions',body:JSON.stringify(body) }
+    }
+    try { await api.request(pendingRequest.value.path, { method:'POST',body:pendingRequest.value.body }) }
+    catch(cause) {
+      if(cause instanceof ApiError && cause.status>=400 && cause.status<500)pendingRequest.value=null
+      else throw new Error('保存结果尚未确认，请勿退出本页；恢复网络后再次点击保存，将重试原记录而不会重复记账。')
+      throw cause
+    }
+    pendingRequest.value=null
+    saved.value = true; operationKey.value = crypto.randomUUID()
+    if (again) { state.value = initialAmountState(); note.value = '' }
+    else await router.push('/bills')
+  })
 }
 
 function press(key: string) {
   if (key === '完成') { void save(false); return }
+  if(locked.value)return
   state.value = reduceAmount(state.value, key)
+  saved.value = false
 }
 
-function close() { window.history.back() }
+function close() { if(!locked.value)void router.push('/bills') }
 </script>
 
 <template>
   <main class="entry-page">
-    <header class="entry-header"><button class="close" aria-label="关闭" @click="close">×</button><h1>记一笔</h1><button class="more" aria-label="更多">•••</button></header>
-    <div class="segment" role="tablist"><button v-for="item in (['支出','收入','转账'] as const)" :key="item" :class="{active:type===item}" @click="changeType(item)">{{item}}</button></div>
+    <header class="entry-header"><button class="close" aria-label="关闭" @click="close">×</button><h1>记一笔</h1><span></span></header>
+    <div class="segment" role="tablist"><button v-for="item in (['支出','收入','转账'] as const)" :key="item" :disabled="locked" :class="{active:type===item}" @click="changeType(item)">{{item}}</button></div>
     <section class="category-panel" aria-label="分类">
-      <div class="category-title"><strong>{{type==='收入'?'选择收入分类':type==='转账'?'选择转出账户':'选择支出分类'}}</strong><button>管理分类 <span>＋</span></button></div>
-      <div class="category-grid">
-        <button v-for="category in categories" :key="category.name" data-category :class="['category',{selected:selected===category.name}]" @click="selected=category.name"><span :class="['category-icon',category.tone]">{{category.icon}}</span><span>{{category.name}}</span></button>
+      <div class="category-title"><strong>{{type==='收入'?'选择收入分类':type==='转账'?'账户间转账':'选择支出分类'}}</strong><button v-if="type!=='转账'" :disabled="locked" @click="router.push('/categories')">管理分类 <span>＋</span></button></div>
+      <p v-if="error" class="error" role="alert">{{error}}</p>
+      <p v-if="loading">正在处理…</p>
+      <div v-if="type!=='转账'" class="category-grid">
+        <button v-for="category in categories" :key="category.id" data-category :disabled="locked" :class="['category',{selected:selected===category.id}]" @click="selected=category.id"><span class="category-icon" :style="{borderColor:category.color}">{{category.icon}}</span><span>{{category.name}}</span></button>
       </div>
+      <p v-if="!loading && !categories.length && type!=='转账'" class="empty-tip">暂无分类，请点击管理分类添加。</p>
+      <div v-if="type==='转账'" class="transfer-fields"><label>转出账户<select v-model="accountId" :disabled="locked"><option value="">请选择</option><option v-for="item in accounts" :key="item.id" :value="item.id">{{item.name}}</option></select></label><label>转入账户<select v-model="toAccountId" :disabled="locked"><option value="">请选择</option><option v-for="item in accounts.filter(item=>item.id!==accountId)" :key="item.id" :value="item.id">{{item.name}}</option></select></label><p>转账不计入收入或支出。</p></div>
     </section>
     <section class="entry-console">
-      <p v-if="saved" class="saved" role="status">已保存到本机，等待同步</p>
+      <p v-if="saved" class="saved" role="status">已保存到云端</p>
       <div class="quick-meta">
-        <button><AppIcon name="calendar" :size="18"/><strong>今天</strong><small>{{today}}</small></button>
-        <button><span class="mini-icon">¥</span><strong>现金账户</strong><small>付款账户</small></button>
-        <button><AppIcon name="user" :size="18"/><strong>自己</strong><small>成员</small></button>
-        <button><span class="mini-icon">⌁</span><strong>添加备注</strong><small>备注</small></button>
+        <button data-edit="date" :disabled="locked" @click="editor='date'"><AppIcon name="calendar" :size="18"/><strong>{{dateValue.slice(5,10)}}</strong><small>记账时间</small></button>
+        <button data-edit="account" :disabled="locked" @click="editor='account'"><span class="mini-icon">¥</span><strong>{{accountName}}</strong><small>账户</small></button>
+        <button :disabled="locked" @click="router.push('/ledgers')"><AppIcon name="user" :size="18"/><strong>{{ledger?.name || '账本'}}</strong><small>切换账本</small></button>
+        <button data-edit="note" :disabled="locked||type==='转账'" @click="editor='note'"><span class="mini-icon">⌁</span><strong>{{note || '添加备注'}}</strong><small>备注</small></button>
       </div>
-      <div class="amount-line"><span class="chosen"><span :class="['chosen-icon',selectedCategory.tone]">{{selectedCategory.icon}}</span>{{selectedCategory.name}}</span><strong :class="{'is-long':state.display.length>8}">¥ {{state.display}}</strong></div>
+      <div class="amount-line"><span class="chosen"><span class="chosen-icon">{{type==='转账'?'⇄':selectedCategory.icon}}</span>{{type==='转账'?'转账':selectedCategory.name}}</span><strong :class="{'is-long':state.display.length>8}">¥ {{state.display}}</strong></div>
       <div class="keypad">
         <button v-for="key in ['1','2','3','+','4','5','6','-','7','8','9']" :key="key" :class="{operator:key==='+'||key==='-'}" @click="press(key)">{{key==='+'?'＋':key==='-'?'－':key}}</button>
-        <button class="done" @click="press('完成')">完成</button>
+        <button class="done" :disabled="loading || !canWrite" @click="press('完成')">完成</button>
         <button @click="press('.')">.</button><button @click="press('0')">0</button><button aria-label="退格" @click="press('backspace')"><AppIcon name="backspace"/></button>
-        <button class="again" @click="save(true)">保存并继续记一笔</button>
+        <button class="again" :disabled="loading || !canWrite" @click="save(true)">保存并继续记一笔</button>
       </div>
     </section>
+    <div v-if="editor" class="modal-backdrop" @click.self="editor=''"><section class="modal" role="dialog" aria-modal="true" aria-label="编辑记账信息"><h2>{{editor==='note'?'填写备注':editor==='date'?'记账时间':'选择账户'}}</h2><textarea v-if="editor==='note'" v-model="note" maxlength="500" aria-label="备注"></textarea><input v-if="editor==='date'" v-model="dateValue" type="datetime-local" aria-label="记账时间"><select v-if="editor==='account'" v-model="accountId" aria-label="账户"><option value="">请选择</option><option v-for="item in accounts" :key="item.id" :value="item.id">{{item.name}}</option></select><router-link v-if="editor==='account'" to="/accounts">管理账户</router-link><button class="primary" @click="editor=''">确定</button></section></div>
   </main>
 </template>
 

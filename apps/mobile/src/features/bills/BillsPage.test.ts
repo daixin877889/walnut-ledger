@@ -7,7 +7,7 @@ import { groupTransactionsByDay, summarizeTransactions } from './bill-view-model
 
 describe('BillsPage', () => {
   it('renders the confirmed dashboard hierarchy', async () => {
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/entry', component: { render: () => h('div') } }] })
+    const router = createRouter({ history: createMemoryHistory(), routes: ['/entry','/ledgers','/budgets'].map(path=>({ path, component: { render: () => h('div') } })) })
     await router.push('/entry'); await router.isReady()
     const html = await renderToString(createSSRApp(BillsPage).use(router))
     for (const text of ['核桃记账', '本月支出', '本月收入', '月度预算', '最近账单']) expect(html).toContain(text)

@@ -17,9 +17,10 @@ export function formatMoney(cents: number) {
 export function groupTransactionsByDay(rows: LocalTransaction[]) {
   const groups: Array<{ date: string; rows: LocalTransaction[] }> = []
   for (const row of rows) {
-    const date = row.occurred_at.slice(0, 10)
-    const current = groups.at(-1)
-    if (current?.date === date) current.rows.push(row)
+    const timestamp = new Date(row.occurred_at)
+    const date = `${timestamp.getFullYear()}-${String(timestamp.getMonth() + 1).padStart(2, '0')}-${String(timestamp.getDate()).padStart(2, '0')}`
+    const current = groups.find(group => group.date === date)
+    if (current) current.rows.push(row)
     else groups.push({ date, rows: [row] })
   }
   return groups

@@ -1,44 +1,72 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import AppIcon from '../../ui/AppIcon.vue'
-import { createIndexedDbDatabase } from '../../core/database/indexed-db'
+import { api, useLedger, loadAllTransactions } from '../../core/api/ledger-context'
 import type { LocalTransaction } from '../../core/database/types'
 import { formatMoney, groupTransactionsByDay, summarizeTransactions } from './bill-view-model'
 
 const rows = ref<LocalTransaction[]>([])
-const loading = ref(true)
-const summary = computed(() => summarizeTransactions(rows.value))
-const groups = computed(() => groupTransactionsByDay(rows.value))
-const month = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long' }).format(new Date())
-const budgetCents = 620000
-const budgetPercent = computed(() => Math.min(100, Math.round(summary.value.expenseCents / budgetCents * 100)))
+const { ledger, error, loading, canWrite, load, run } = useLedger()
+const editing = ref<LocalTransaction|null>(null), deleting = ref(false)
+const editAmount = ref(''), editNote = ref(''), editDate = ref('')
+function edit(row:LocalTransaction) {
+  if(!canWrite.value)return
+  editing.value=row;deleting.value=false;editAmount.value=(row.amount_cents/100).toFixed(2);editNote.value=String(row.note??'')
+  const date=new Date(row.occurred_at);editDate.value=new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16)
+}
+async function saveEdit(){await run(async()=>{
+  if(!/^\d{1,9}(\.\d{1,2})?$/.test(editAmount.value)||Number(editAmount.value)<=0)throw new Error('请输入有效的正数金额')
+  const date=new Date(editDate.value);if(!Number.isFinite(date.getTime()))throw new Error('请选择有效日期')
+  await api.request(`/transactions/${editing.value!.id}`,{method:'PATCH',body:JSON.stringify({ledger_id:ledger.value!.id,version:editing.value!.version,amount_cents:Math.round(Number(editAmount.value)*100),note:editNote.value,occurred_at:date.toISOString()})})
+  editing.value=null;rows.value=await loadAllTransactions<LocalTransaction>(ledger.value!.id)
+})}
+async function remove(){await run(async()=>{
+  await api.request(`/transactions/${editing.value!.id}?ledger_id=${encodeURIComponent(ledger.value!.id)}&version=${editing.value!.version}`,{method:'DELETE'})
+  editing.value=null;deleting.value=false;rows.value=await loadAllTransactions<LocalTransaction>(ledger.value!.id)
+})}
+const now = new Date()
+const month = ref(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`)
+const query = ref('')
+const budget=ref<{amount_cents:number}|null>(null),budgetError=ref('')
+async function loadBudget(){
+  if(!ledger.value)return
+  const selectedMonth=month.value;budget.value=null;budgetError.value=''
+  try{const value=await api.get<{amount_cents:number}|null>(`/ledgers/${ledger.value.id}/budget?month=${encodeURIComponent(selectedMonth)}`);if(month.value===selectedMonth)budget.value=value&&Number.isSafeInteger(value.amount_cents)?value:null}
+  catch{if(month.value===selectedMonth)budgetError.value='预算读取失败，请刷新重试'}
+}
+watch(month,loadBudget)
+const monthRows = computed(() => rows.value.filter(row => { const date = new Date(row.occurred_at); return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}` === month.value }))
+const summary = computed(() => summarizeTransactions(monthRows.value))
+const visibleRows = computed(() => monthRows.value.filter(row => `${row.note ?? ''} ${row.category_name ?? ''} ${row.account_name ?? ''}`.includes(query.value)))
+const groups = computed(() => groupTransactionsByDay(visibleRows.value))
 const iconFor = (name: unknown) => ({ 餐饮:'🍜',购物:'🛍️',交通:'🚕',居住:'🏠',工资:'💼' }[String(name)] ?? '🧾')
 const titleFor = (row: LocalTransaction) => String(row.note || row.category_name || (row.kind === 'income' ? '收入' : '支出'))
 const dayLabel = (value: string) => new Intl.DateTimeFormat('zh-CN', { month:'long', day:'numeric', weekday:'short' }).format(new Date(value))
 
-onMounted(async () => {
-  try { rows.value = await (await createIndexedDbDatabase()).listTransactions() }
-  finally { loading.value = false }
-})
+async function refresh() { await run(async () => { const current = await load(); rows.value = await loadAllTransactions<LocalTransaction>(current.id);await loadBudget() }) }
+onMounted(refresh)
 </script>
 
 <template>
   <main class="page bills-page">
-    <header class="topbar"><div class="brand"><span class="nut-mark">核</span><span>核桃记账</span></div><button aria-label="搜索"><AppIcon name="search" :size="19"/></button></header>
+    <header class="topbar"><div class="brand"><span class="nut-mark">核</span><span>核桃记账</span></div><button aria-label="刷新账单" :disabled="loading" @click="refresh">↻</button></header>
+    <p v-if="error" role="alert" class="error">{{error}}</p>
     <section class="hero">
-      <div class="hero-ring"></div><div class="month-row"><span>{{month}}</span><span>总览 <AppIcon name="chevron" :size="13"/></span></div>
+      <div class="hero-ring"></div><div class="month-row"><label>月份 <input v-model="month" type="month" aria-label="账单月份"></label><router-link to="/ledgers">{{ledger?.name || '选择账本'}} ›</router-link></div>
       <small>本月结余</small><h1>¥ {{formatMoney(summary.balanceCents)}}</h1>
       <div class="summary-grid"><div><small>本月支出</small><strong>¥ {{formatMoney(summary.expenseCents)}}</strong></div><div><small>本月收入</small><strong>¥ {{formatMoney(summary.incomeCents)}}</strong></div></div>
     </section>
-    <section class="budget-card card"><div><strong>月度预算</strong><span>{{budgetPercent}}%</span></div><p>¥{{formatMoney(summary.expenseCents)}} / ¥{{formatMoney(budgetCents)}}</p><div class="progress"><i :style="{width:budgetPercent+'%'}"></i></div></section>
-    <div class="section-heading"><div><h2>最近账单</h2><span>每一笔，都清清楚楚</span></div><button>筛选 <span>⌄</span></button></div>
+    <section class="budget-card card"><div><strong>月度预算</strong><router-link to="/budgets">设置 ›</router-link></div><p v-if="budget">¥ {{formatMoney(summary.expenseCents)}} / ¥ {{formatMoney(budget.amount_cents)}} · {{summary.expenseCents>budget.amount_cents?'已超支':'剩余 ¥ '+formatMoney(budget.amount_cents-summary.expenseCents)}}</p><p v-else>{{budgetError || '本月尚未设置预算'}}</p><div v-if="budget" class="progress"><i :style="{width:Math.min(100,summary.expenseCents/budget.amount_cents*100)+'%'}"></i></div></section>
+    <div class="section-heading"><div><h2>最近账单</h2><span>每一笔，都清清楚楚</span></div></div>
+    <input v-model="query" type="search" placeholder="搜索备注、分类或账户" aria-label="搜索账单" style="width:100%;margin-bottom:12px">
     <section v-for="group in groups" :key="group.date" class="day-card card">
       <div class="day-head"><span>{{dayLabel(group.rows[0]!.occurred_at)}}</span><span>共 {{group.rows.length}} 笔</span></div>
-      <article v-for="row in group.rows" :key="row.id" class="bill-row"><span class="bill-icon">{{iconFor(row.category_name)}}</span><div><strong>{{titleFor(row)}}</strong><small>{{row.category_name || '未分类'}} · {{row.account_name || '现金账户'}}</small></div><b :class="{income:row.kind==='income'}">{{row.kind==='income'?'+':'-'}}{{formatMoney(row.amount_cents)}}</b></article>
+      <article v-for="row in group.rows" :key="row.id" class="bill-row" :role="canWrite?'button':undefined" :tabindex="canWrite?0:undefined" @click="edit(row)" @keydown.enter="edit(row)"><span class="bill-icon">{{row.kind==='transfer'?'⇄':iconFor(row.category_name)}}</span><div><strong>{{row.kind==='transfer'?'账户转账':titleFor(row)}}</strong><small>{{row.category_name || '转账'}} · {{row.account_name}}{{row.kind==='transfer'?' → '+row.transfer_account_name:''}}</small></div><b :class="{income:row.kind==='income'}">{{row.kind==='income'?'+':row.kind==='transfer'?'':'-'}}{{formatMoney(row.amount_cents)}}</b></article>
     </section>
-    <section v-if="!rows.length" class="empty-card card">
+    <section v-if="!visibleRows.length" class="empty-card card">
       <div class="empty-visual"><span></span><i>¥</i></div><h3>{{loading?'正在读取账本':'这个月还没有账单'}}</h3><p>从记录第一笔开始，让每一份收支都有迹可循</p><router-link to="/entry">记下第一笔</router-link>
     </section>
+    <div v-if="editing" class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true" aria-label="编辑账单"><h2>{{deleting?'删除这笔账单？':'编辑账单'}}</h2><p v-if="error" class="error" role="alert">{{error}}</p><template v-if="deleting"><p>删除后将从收支统计和账户余额中移除。</p><button class="danger" :disabled="loading" @click="remove">确认删除</button><button :disabled="loading" @click="deleting=false">取消删除</button></template><form v-else @submit.prevent="saveEdit"><label>金额<input name="amount" v-model="editAmount" inputmode="decimal" required></label><label>日期<input v-model="editDate" type="datetime-local" required></label><label>备注<textarea v-model="editNote" maxlength="500"></textarea></label><button class="primary" :disabled="loading">保存修改</button><button type="button" :disabled="loading" @click="deleting=true">删除账单</button><button type="button" :disabled="loading" @click="editing=null">关闭</button></form></section></div>
   </main>
 </template>
 

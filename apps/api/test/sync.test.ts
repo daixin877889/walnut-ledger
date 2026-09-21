@@ -25,23 +25,22 @@ describe('incremental sync', () => {
   afterEach(async () => mf.dispose())
   const call = (path: string, method = 'GET', body?: unknown) => createApp().request(`/api/v1${path}`, { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }, env)
 
-  it('accepts an idempotent push and exposes it through paged pull', async () => {
+  it('fails closed for legacy sync writes until accounting and authorization are implemented', async () => {
     const operation = { operation_id: 'op-1', entity_type: 'transaction', entity_id: 'tx-1', operation: 'upsert', base_version: 0, payload: { kind: 'expense', amount_cents: 2850, note: '午餐', occurred_at: '2026-09-21T08:00:00Z' } }
     const first = await call('/sync/push', 'POST', { ledger_id: ledgerId, changes: [operation] })
-    expect(first.status).toBe(200)
-    expect(((await first.json()) as any).data.accepted).toHaveLength(1)
-    expect(await db.prepare('SELECT amount_cents FROM transactions WHERE id = ?').bind('tx-1').first('amount_cents')).toBe(2850)
-    const replay = (await (await call('/sync/push', 'POST', { ledger_id: ledgerId, changes: [operation] })).json()) as any
-    expect(replay.data.accepted[0].revision).toBe(1)
+    expect(first.status).toBe(503)
+    expect(((await first.json()) as any).code).toBe('SYNC_NOT_AVAILABLE')
+    expect(await db.prepare('SELECT COUNT(*) AS total FROM transactions').first('total')).toBe(0)
     const pull = (await (await call(`/sync/pull?ledger_id=${ledgerId}&after=0&limit=1`)).json()) as any
-    expect(pull.data.changes).toHaveLength(1)
-    expect(pull.data.revision).toBe(1)
+    expect(pull.data.changes).toHaveLength(0)
+    expect(pull.data.revision).toBe(0)
   })
 
-  it('returns client and server versions for a stale update', async () => {
+  it('cannot overwrite a transaction from another ledger through legacy sync', async () => {
+    await db.prepare('INSERT INTO ledgers (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').bind('other-ledger', 'user-1', '另一账本', 'now', 'now').run()
+    await db.prepare("INSERT INTO transactions (id,ledger_id,kind,amount_cents,note,occurred_at,created_by,updated_by,created_at,updated_at) VALUES ('tx-1','other-ledger','expense',500,'original','2026-09-21T08:00:00Z','user-1','user-1','now','now')").run()
     const base = { operation_id: 'op-1', entity_type: 'transaction', entity_id: 'tx-1', operation: 'upsert', base_version: 0, payload: { kind: 'expense', amount_cents: 100, occurred_at: '2026-09-21T08:00:00Z', note: 'A' } }
-    await call('/sync/push', 'POST', { ledger_id: ledgerId, changes: [base] })
-    const stale = (await (await call('/sync/push', 'POST', { ledger_id: ledgerId, changes: [{ ...base, operation_id: 'op-2', base_version: 0, payload: { ...base.payload, note: 'B' } }] })).json()) as any
-    expect(stale.data.conflicts[0]).toMatchObject({ entity_id: 'tx-1', client: { version: 1 }, server: { version: 1 } })
+    expect((await call('/sync/push', 'POST', { ledger_id: ledgerId, changes: [base] })).status).toBe(503)
+    expect(await db.prepare("SELECT amount_cents FROM transactions WHERE id='tx-1'").first('amount_cents')).toBe(500)
   })
 })

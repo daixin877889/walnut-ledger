@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app'
 import type { Env } from '../src/env'
 import { sha256Hex, signAccessToken } from '../src/auth/tokens'
+import { SessionApiClient } from '../../mobile/src/core/api/client'
+import { SessionStore } from '../../mobile/src/core/session/session-store'
+import { MemorySecureStore } from '../../mobile/src/core/session/secure-store'
 
 const migrationPath = fileURLToPath(new URL('../migrations/0001_core.sql', import.meta.url))
 const compactSql = (sql: string) => sql.replace(/\s+/g, ' ').replace(/;\s*/g, ';\n').trim()
@@ -108,5 +111,87 @@ describe('transactions API', () => {
     expect(first.data.next_cursor).toBeTypeOf('string')
     const second = (await (await request(`/ledgers/${expense.ledger_id}/transactions?limit=2&cursor=${encodeURIComponent(first.data.next_cursor!)}`)).json()) as { data: { items: Array<{ occurred_at: string }> } }
     expect(second.data.items.map((item) => item.occurred_at)).toEqual(['2026-09-20T08:00:00Z'])
+  })
+
+  it('renames and reorders a category, rejects stale edits, and preserves archived bill references', async () => {
+    await post('/transactions', expense)
+    const path = `/ledgers/${expense.ledger_id}/categories/${expense.category_id}`
+    const updated = await request(path, 'PATCH', { name: '三餐', icon: '🍜', color: '#123456', sort_order: 5, version: 1 })
+    expect(updated.status).toBe(200)
+    expect((await updated.json() as any).data).toMatchObject({ name: '三餐', sort_order: 5, version: 2 })
+    expect((await request(path, 'PATCH', { name: '旧编辑', icon: '🍜', color: '#123456', sort_order: 0, version: 1 })).status).toBe(409)
+    await request(path, 'DELETE')
+    const bills = await (await request(`/ledgers/${expense.ledger_id}/transactions`)).json() as any
+    expect(bills.data.items[0]).toMatchObject({ category_id: expense.category_id, category_name: '三餐' })
+  })
+
+  it('rejects category edits from a viewer without changing the name', async () => {
+    await db.prepare("UPDATE ledger_members SET role = 'viewer' WHERE user_id = 'user-1'").run()
+    const response = await request(`/ledgers/${expense.ledger_id}/categories/${expense.category_id}`, 'PATCH', { name: '改名', icon: 'x', color: '#123456', sort_order: 0, version: 1 })
+    expect(response.status).toBe(404)
+    expect(await db.prepare('SELECT name FROM categories WHERE id = ?').bind(expense.category_id).first('name')).toBe('餐饮')
+  })
+
+  it('records income as a positive account entry and reports actual account balance', async () => {
+    const created = await (await request(`/ledgers/${expense.ledger_id}/categories`, 'POST', { name: '工资', kind: 'income', icon: '💼', color: '#123456' })).json() as any
+    expect((await post('/transactions', { ...expense, kind: 'income', category_id: created.data.id })).status).toBe(201)
+    const accounts = await (await request(`/ledgers/${expense.ledger_id}/accounts`)).json() as any
+    expect(accounts.data.find((item: any) => item.id === expense.account_id).balance_cents).toBe(1200)
+  })
+  it('adds default categories atomically without duplicating existing categories on retry', async () => {
+    const path = `/ledgers/${expense.ledger_id}/categories/batch`
+    const payload = [{ name: '餐饮', kind: 'expense', icon: '🍜', color: '#123456' }, { name: '工资', kind: 'income', icon: '💼', color: '#123456' }]
+    expect((await post(path, payload)).status).toBe(201)
+    expect((await post(path, payload)).status).toBe(201)
+    expect(await db.prepare('SELECT COUNT(*) AS total FROM categories').first('total')).toBe(2)
+  })
+  it('persists monthly budgets with version checks and prevents viewer changes',async()=>{
+    const path=`/ledgers/${expense.ledger_id}/budget`
+    const initial=await request(path,'PUT',{month:'2026-09',amount_cents:620000,version:0})
+    expect(initial.status).toBe(200)
+    expect((await initial.json() as any).data).toMatchObject({amount_cents:620000,version:1})
+    expect((await request(path,'PUT',{month:'2026-09',amount_cents:700000,version:0})).status).toBe(409)
+    const read=await(await request(path+'?month=2026-09')).json() as any
+    expect(read.data.amount_cents).toBe(620000)
+    expect((await request(path+'?month=2026-13')).status).toBe(422)
+    await db.prepare("UPDATE ledger_members SET role='viewer' WHERE user_id='user-1'").run()
+    expect((await request(path,'PUT',{month:'2026-09',amount_cents:100,version:1})).status).toBe(404)
+  })
+  it('runs the mobile client through real API and D1 for expense, income, transfer and edit balances', async () => {
+    const sessions = new SessionStore(new MemorySecureStore()); await sessions.setTokens(token, 'unused-refresh')
+    const client = new SessionApiClient('https://local.test/api/v1', sessions, async (url, init) => createApp().request(String(url), init, env))
+    const path = `/ledgers/${expense.ledger_id}`
+    const incomeCategory = await client.request<{id:string}>(`${path}/categories`, {method:'POST',body:JSON.stringify({name:'工资',kind:'income',icon:'💼',color:'#123456'})})
+    const spent = await client.request<{id:string}>('/transactions',{method:'POST',body:JSON.stringify(expense)})
+    await client.request('/transactions',{method:'POST',body:JSON.stringify({...expense,kind:'income',category_id:incomeCategory.id,amount_cents:10000,idempotency_key:'mobile-income'})})
+    await client.request('/transfers',{method:'POST',body:JSON.stringify({ledger_id:expense.ledger_id,from_account_id:expense.account_id,to_account_id:'33333333-3333-4333-8333-333333333333',amount_cents:500,occurred_at:expense.occurred_at,idempotency_key:'mobile-transfer'})})
+    await client.request(`/transactions/${spent.id}`,{method:'PATCH',body:JSON.stringify({ledger_id:expense.ledger_id,version:1,amount_cents:1400,note:'修改支出',occurred_at:expense.occurred_at})})
+    const accounts=await client.get<Array<{id:string;balance_cents:number}>>(`${path}/accounts`)
+    expect(accounts.find(item=>item.id===expense.account_id)?.balance_cents).toBe(8100)
+    expect(accounts.find(item=>item.id==='33333333-3333-4333-8333-333333333333')?.balance_cents).toBe(500)
+    const bills=await client.get<{items:unknown[]}>(`${path}/transactions`)
+    expect(bills.items).toHaveLength(3)
+  })
+  it.each(['PATCH','DELETE'])('rejects a raced edit against %s without corrupting the winning account entry', async (secondMethod) => {
+    const created = await (await post('/transactions',expense)).json() as any
+    let arrivals=0, release!:()=>void
+    const barrier=new Promise<void>(resolve=>{release=resolve})
+    const racingDatabase=new Proxy(db,{get(target,key){
+      if(key==='prepare')return (sql:string)=>{
+        const statement=target.prepare(sql)
+        if(!sql.startsWith('SELECT kind FROM transactions') && !sql.startsWith('SELECT id FROM transactions'))return statement
+        return {bind(...values:unknown[]){const bound=statement.bind(...values);return {async first(){const row=await bound.first();if(++arrivals===2)release();await barrier;return row}}}}
+      }
+      const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value
+    }}) as D1Database
+    const responses=await Promise.all([1300,1400].map((amount,index)=>{
+      const method=index===1?secondMethod:'PATCH'
+      return createApp().request(`/api/v1/transactions/${created.data.id}${method==='DELETE'?`?ledger_id=${expense.ledger_id}&version=1`:''}`,{method,headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},...(method==='PATCH'?{body:JSON.stringify({ledger_id:expense.ledger_id,version:1,amount_cents:amount,note:'race',occurred_at:expense.occurred_at})}:{})},{...env,DB:racingDatabase})
+    }))
+    expect(responses.filter(response=>response.status===409)).toHaveLength(1)
+    expect(responses.filter(response=>response.ok)).toHaveLength(1)
+    const stored=await db.prepare('SELECT amount_cents, deleted_at FROM transactions WHERE id = ?').bind(created.data.id).first<{amount_cents:number;deleted_at:string|null}>()
+    const entry=await db.prepare('SELECT amount_cents FROM account_entries WHERE transaction_id = ?').bind(created.data.id).first<number>('amount_cents')
+    expect(entry).toBe(stored!.deleted_at ? null : -stored!.amount_cents)
   })
 })

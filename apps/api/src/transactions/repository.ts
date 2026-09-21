@@ -18,7 +18,10 @@ export class TransactionRepository {
     if (cursor) {
       try { boundary = JSON.parse(atob(cursor)) as { occurred_at: string; id: string } } catch { boundary = undefined }
     }
-    const sql = `SELECT id, ledger_id, kind, amount_cents, account_id, category_id, transfer_account_id, note, occurred_at, version
+    const sql = `SELECT id, ledger_id, kind, amount_cents, account_id, category_id, transfer_account_id, note, occurred_at, version,
+      (SELECT name FROM categories WHERE id = transactions.category_id AND ledger_id = transactions.ledger_id) AS category_name,
+      (SELECT name FROM accounts WHERE id = transactions.account_id AND ledger_id = transactions.ledger_id) AS account_name,
+      (SELECT name FROM accounts WHERE id = transactions.transfer_account_id AND ledger_id = transactions.ledger_id) AS transfer_account_name
       FROM transactions WHERE ledger_id = ? AND deleted_at IS NULL
       ${boundary ? 'AND (occurred_at < ? OR (occurred_at = ? AND id < ?))' : ''}
       ORDER BY occurred_at DESC, id DESC LIMIT ?`
