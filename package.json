@@ -6,7 +6,8 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm --filter @walnut/mobile build",
-    "lint": "pnpm typecheck"
+    "lint": "pnpm typecheck",
+    "invite:create": "node scripts/create-invite.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.2",
