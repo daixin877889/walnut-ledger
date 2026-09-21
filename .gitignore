@@ -9,6 +9,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.production
 node_modules/
 *.log
 .DS_Store
