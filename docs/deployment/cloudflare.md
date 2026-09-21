@@ -33,3 +33,12 @@ pnpm --filter @walnut/mobile exec cap open ios
 ```
 
 Android Studio 生成签名 APK/AAB；Xcode 生成 iOS Archive。签名密钥和证书不要提交到仓库。
+
+## Web 预览部署
+
+```bash
+pnpm --filter @walnut/mobile build
+pnpm --filter @walnut/api exec wrangler pages deploy ../mobile/dist --project-name walnut-ledger --branch main
+```
+
+首次执行会创建 Pages 项目。`apps/mobile/public/_redirects` 保证 `/login`、`/register` 等客户端路由可以直接访问。
