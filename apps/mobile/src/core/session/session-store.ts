@@ -1,2 +1,2 @@
 import type { SecureStore } from './secure-store'
-export class SessionStore { constructor(private store: SecureStore) {} getAccessToken(){return this.store.get('access')} setTokens(access:string,refresh:string){return Promise.all([this.store.set('access',access),this.store.set('refresh',refresh)])} async clear(){await this.store.remove('access');await this.store.remove('refresh')} }
+export class SessionStore { constructor(private store: SecureStore) {} getAccessToken(){return this.store.get('access')} getRefreshToken(){return this.store.get('refresh')} setTokens(access:string,refresh:string){return Promise.all([this.store.set('access',access),this.store.set('refresh',refresh)])} async clear(){await this.store.remove('access');await this.store.remove('refresh')} }
