@@ -5,12 +5,8 @@ compatibility_date = "2026-09-21"
 [[d1_databases]]
 binding = "DB"
 database_name = "walnut-ledger"
-database_id = "replace-after-wrangler-d1-create"
+database_id = "3c629cbf-3aaa-4f1b-bac3-6ff74d4b37bb"
 migrations_dir = "migrations"
-
-[[r2_buckets]]
-binding = "FILES"
-bucket_name = "walnut-ledger-files"
 
 [vars]
 PASSWORD_ITERATIONS = "210000"
