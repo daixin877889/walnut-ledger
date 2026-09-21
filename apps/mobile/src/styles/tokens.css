@@ -1,0 +1,18 @@
+:root {
+  --walnut-green: #20a46d;
+  --walnut-green-2: #48bd88;
+  --walnut-deep: #0d6644;
+  --walnut-ink: #17221d;
+  --walnut-muted: #78857f;
+  --walnut-bg: #f3f7f4;
+  --walnut-card: #fff;
+  --walnut-mint: #eaf8f1;
+  --walnut-line: #e4ebe7;
+  --walnut-red: #e65e62;
+  --walnut-gold: #e8a341;
+  --walnut-blue: #4d8bdc;
+  --walnut-radius: 20px;
+  --walnut-shadow: 0 12px 34px rgba(20, 74, 51, .09);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}

@@ -1,2 +1,2 @@
-<template><router-view/><nav><router-link to="/bills">账单</router-link><router-link to="/reports">统计</router-link><router-link class="entry" to="/entry">记一笔</router-link><router-link to="/accounts">账户</router-link><router-link to="/me">我的</router-link></nav></template>
-<style>body{margin:0;font-family:system-ui;background:#f7f8f5;color:#20231f}nav{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-around;background:white;padding:12px}a{color:#596057;text-decoration:none}.entry{background:#6d8e49;color:white;border-radius:24px;padding:10px 18px}</style>
+<script setup lang="ts">import AppShell from '../ui/AppShell.vue'</script>
+<template><AppShell /></template>

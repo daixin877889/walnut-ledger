@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
+    "test:visual": "vitest run e2e/visual.spec.ts",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
     "@types/node": "latest",
+    "@vue/server-renderer": "3.5.43",
     "fake-indexeddb": "latest",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4",

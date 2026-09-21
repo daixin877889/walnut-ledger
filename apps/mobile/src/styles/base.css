@@ -1,0 +1,15 @@
+@import './tokens.css';
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body, #app { margin: 0; min-height: 100%; background: var(--walnut-bg); }
+body { color: var(--walnut-ink); font: 14px/1.45 Inter, ui-rounded, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; overscroll-behavior: none; }
+button, input { font: inherit; }
+button { color: inherit; }
+a { color: inherit; text-decoration: none; }
+.page { min-height: 100dvh; padding: calc(var(--safe-top) + 14px) 14px calc(92px + var(--safe-bottom)); }
+.page-title { margin: 4px 4px 18px; }
+.page-title h1 { margin: 0; font-size: 27px; letter-spacing: -.7px; }
+.page-title p { margin: 4px 0 0; color: var(--walnut-muted); }
+.card { background: var(--walnut-card); border: 1px solid var(--walnut-line); border-radius: var(--walnut-radius); box-shadow: 0 4px 18px rgba(19, 67, 46, .035); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+@media (min-width: 720px) { #app { width: 430px; margin: 0 auto; min-height: 100vh; box-shadow: 0 0 70px rgba(22, 67, 48, .14); } }

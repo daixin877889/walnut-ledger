@@ -27,6 +27,7 @@ pnpm --filter @walnut/api exec wrangler deploy
 
 ```bash
 pnpm --filter @walnut/mobile build
+pnpm --filter @walnut/mobile test:visual
 pnpm --filter @walnut/mobile exec cap sync
 pnpm --filter @walnut/mobile exec cap open android
 pnpm --filter @walnut/mobile exec cap open ios
