@@ -11,7 +11,7 @@ type AppEnv = AuthEnv
 function service(env: Env): AuthService {
   const iterations = Number(env.PASSWORD_ITERATIONS)
   if (!Number.isSafeInteger(iterations) || iterations < 1_000) throw new Error('INVALID_PASSWORD_ITERATIONS')
-  if (env.ENVIRONMENT === 'production' && iterations < 210_000) throw new Error('UNSAFE_PASSWORD_ITERATIONS')
+  if (env.ENVIRONMENT === 'production' && iterations < 10_000) throw new Error('UNSAFE_PASSWORD_ITERATIONS')
   return new AuthService(new AuthRepository(env.DB), env.ACCESS_TOKEN_SECRET, iterations)
 }
 

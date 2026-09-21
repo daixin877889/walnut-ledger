@@ -18,4 +18,12 @@ describe('mobile auth service', () => {
     const service = new AuthService('https://api.example.com', new SessionStore(new MemorySecureStore()))
     await expect(service.register({ invite_code: 'bad-code', username: 'owner', password: 'very-secure-password', device_name: 'Mac' })).rejects.toThrow('INVITE_INVALID')
   })
+
+  it('surfaces a useful error when the API returns non-JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Internal Server Error', { status: 500 })))
+    const service = new AuthService('https://api.example.com', new SessionStore(new MemorySecureStore()))
+
+    await expect(service.register({ invite_code: 'active-code', username: 'owner', password: 'very-secure-password', device_name: 'Mac' }))
+      .rejects.toThrow('HTTP_500')
+  })
 })

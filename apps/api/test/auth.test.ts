@@ -107,6 +107,15 @@ describe('authentication API', () => {
     expect(await database.prepare('SELECT COUNT(*) AS total FROM ledgers').first('total')).toBe(1)
   })
 
+  it('supports the production password cost configured for the free Worker', async () => {
+    env.ENVIRONMENT = 'production'
+    env.PASSWORD_ITERATIONS = '10000'
+
+    const response = await register('free_worker_user')
+
+    expect(response.status).toBe(201)
+  })
+
   it('rejects a duplicate username', async () => {
     expect((await register()).status).toBe(201)
     await seedInvite('SECOND-CODE', '2099-01-01T00:00:00.000Z')

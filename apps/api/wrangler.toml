@@ -9,7 +9,7 @@ database_id = "3c629cbf-3aaa-4f1b-bac3-6ff74d4b37bb"
 migrations_dir = "migrations"
 
 [vars]
-PASSWORD_ITERATIONS = "210000"
+PASSWORD_ITERATIONS = "10000"
 
 [triggers]
 crons = ["17 3 * * *"]
